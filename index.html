@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="rw">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Random Name Picker for Fun</title>
+    <!-- Firebase App (the core Firebase SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <!-- Firebase Database -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        /* Base styles */
+        :root {
+            --primary-color: #00796b;
+            --primary-dark: #004d40;
+            --text-color: #333;
+            --light-bg: #f8f9fa;
+            --admin-color: #9c27b0;
+            --log-header-bg: #f5f5f5;
+            --log-row-bg: #ffffff;
+            --log-row-alt-bg: #f9f9f9;
+            --log-border: #e0e0e0;
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary-color: #26a69a;
+                --primary-dark: #4db6ac;
+                --text-color: #f0f0f0;
+                --light-bg: #1e1e1e;
+                --admin-color: #ce93d8;
+                --log-header-bg: #424242;
+                --log-row-bg: #333333;
+                --log-row-alt-bg: #3a3a3a;
+                --log-border: #555555;
+            }
+            body {
+                background: linear-gradient(to right, #121212, #1a2327) !important;
+                color: var(--text-color);
+            }
+            input, #admin-log, #admin-panel {
+                background-color: #2a2a2a;
+                color: #e0e0e0;
+            }
+            footer {
+                color: #aaaaaa;
+            }
+            #result-display {
+                background-color: #263238 !important;
+            }
+            #message-box {
+                background-color: #4a1515 !important;
+            }
+            #message-box.success {
+                background-color: #1b5e20 !important;
+            }
+            #name-list {
+                background-color: #333333 !important;
+            }
+            #name-list div:hover {
+                background-color: #444444 !important;
+            }
+            .log-table th {
+                background-color: var(--log-header-bg);
+                color: #ffffff;
+            }
+            .log-table tr:nth-child(even) {
+                background-color: var(--log-row-alt-bg);
+            }
+            .log-table tr:nth-child(odd) {
+                background-color: var(--log-row-bg);
+            }
+            .log-table td, .log-table th {
+                border-bottom: 1px solid var(--log-border);
+            }
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(to right, #f8f9fa, #e0f7fa);
+            padding: 20px;
+            text-align: center;
+            color: var(--text-color);
+            max-width: 800px;
+            margin: 0 auto;
+            transition: background 0.3s ease;
+        }
+        h1, h2 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+        }
+        input, button {
+            padding: 12px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        input {
+            width: 250px;
+            max-width: 90%;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background-color: var(--primary-dark);
+            transform: scale(1.05);
+        }
+        button:hover:disabled {
+            transform: none;
+            background-color: var(--primary-color);
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        #name-count {
+            margin: 20px 0;
+            font-size: 24px;
+            color: var(--text-color);
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+        footer {
+            margin-top: 40px;
+            font-size: 14px;
+            color: #777;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        #admin-panel, #admin-log {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f1f1f1;
+            border-radius: 10px;
+            text-align: left;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #admin-panel {
+            border-left: 5px solid var(--admin-color);
+        }
+        #admin-log {
+            max-height: 400px;
+            overflow-y: auto;
+            border-left: 5px solid #ff9800;
+        }
+        #name-list {
+            text-align: left;
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        #name-list div {
+            padding: 8px 12px;
+            margin: 3px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #name-list div:hover {
+            background-color: #d5d5d5;
+        }
+        .remove-btn {
+            color: #f44336;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .remove-btn:hover {
+            text-decoration: underline;
+        }
+
+        /* Animation for picked name */
+        @keyframes highlight {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .highlight {
+            animation: highlight 0.5s ease;
+        }
+
+        /* Pulsing animation for result display */
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+            50% { transform: scale(1.03); box-shadow: 0 8px 16px rgba(211, 47, 47, 0.3); }
+            100% { transform: scale(1); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        }
+        .pulse-animation {
+            animation: pulse 1.5s ease infinite;
+        }
+
+        #message-box {
+            margin: 15px auto;
+            padding: 15px;
+            background-color: #ffebee;
+            border-radius: 10px;
+            font-size: 18px;
+            color: #d32f2f;
+            font-weight: bold;
+            max-width: 90%;
+        }
+        #message-box.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .divider {
+            height: 2px;
+            background: linear-gradient(to right, transparent, var(--primary-color), transparent);
+            margin: 30px 0;
+            width: 100%;
+        }
+
+        /* Admin access method - IMPROVED VISIBILITY */
+        #admin-access {
+            position: relative;
+            margin-top: 15px;
+            text-align: center;
+            padding: 8px;
+            width: 100%;
+        }
+
+        #admin-panel-toggle {
+            color: var(--admin-color);
+            opacity: 0.7;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            padding: 5px 10px;
+            border: 1px solid rgba(156, 39, 176, 0.3);
+            border-radius: 4px;
+        }
+
+        #admin-panel-toggle:hover {
+            opacity: 1;
+            background-color: rgba(156, 39, 176, 0.1);
+        }
+
+        /* Big pick button style */
+        #pickButton {
+            background-color: #d32f2f;
+            font-size: 18px;
+            padding: 15px 30px;
+            transition: all 0.3s ease;
+        }
+        #pickButton:hover {
+            background-color: #b71c1c;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        }
+        #pickButton:disabled {
+            background-color: #ddd;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        #pickButton:hover:disabled {
+            background-color: #ddd;
+            transform: none;
+        }
+
+        /* Improved log table styling */
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 15px 0;
+        }
+
+        .log-table th {
+            background-color: var(--log-header-bg);
+            color: #333;
+            text-align: left;
+            padding: 12px;
+            font-weight: bold;
+            border-bottom: 2px solid var(--log-border);
+        }
+
+        .log-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--log-border);
+        }
+
+        .log-table tr:nth-child(even) {
+            background-color: var(--log-row-alt-bg);
+        }
+
+        .log-table tr:nth-child(odd) {
+            background-color: var(--log-row-bg);
+        }
+
+        .log-table tr:hover {
+            background-color: rgba(0,0,0,0.05);
+        }
+
+        .log-timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .log-picker, .log-picked {
+            font-weight: bold;
+        }
+
+        /* No picks message */
+        .no-picks {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Fun elements */
+        .fun-header {
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .fun-emoji {
+            display: inline-block;
+            animation: float 3s ease-in-out infinite;
+            margin: 0 10px;
+            font-size: 28px;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .emoji-left {
+            animation-delay: 0.5s;
+        }
+
+        .emoji-right {
+            animation-delay: 1s;
+        }
+
+        /* Developer avatar */
+        .developer-avatar {
+            width: 50px;
+            height: 50px;
+            margin-right: 10px;
+        }
+
+        .footer-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .animate-gears {
+            animation: spin 10s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .developer-name {
+            font-weight: bold;
+            margin-left: 8px;
+            font-size: 16px;
+            color: var(--primary-color);
+        }
+
+        /* Refresh button styling */
+        .refresh-button {
+            background-color: #2196F3;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            padding: 10px 15px;
+        }
+        .refresh-button:hover {
+            background-color: #0d8af0;
+        }
+        .refresh-button:disabled {
+            background-color: #90caf9;
+            cursor: not-allowed;
+        }
+        .refresh-button svg {
+            width: 16px;
+            height: 16px;
+            animation: none;
+            transition: all 0.3s ease;
+        }
+        .refresh-button.refreshing svg {
+            animation: rotate 1s linear infinite;
+        }
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Loading overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        .loader-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        .loader-text {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div class="fun-header">
+    <span class="fun-emoji emoji-left">🎮</span>
+    <span class="fun-emoji">🎪</span>
+    <h1>🎲 Random Name Picker for Fun 🎯</h1>
+    <span class="fun-emoji">🎭</span>
+    <span class="fun-emoji emoji-right">🎨</span>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+    <div class="loader-container">
+        <div class="loader"></div>
+        <div class="loader-text">Gutangiza Porogaramu...</div>
+    </div>
+</div>
+
+<!-- User section in Kinyarwanda -->
+<div id="user-section">
+    <p>Andika izina ryawe kugira ngo uhitemo izina ry'umuntu uratombora✨</p>
+
+    <div id="name-count">
+        Umubare w'amazina uhari: <span id="count">0</span>
+        <button id="refresh-button" class="refresh-button" onclick="refreshData()">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            Refresh
+        </button>
+    </div>
+
+    <div>
+        <input type="text" id="userNameInput" placeholder="Andika izina ryawe ryuzuye" />
+        <button id="pickButton" onclick="pickRandomName()" disabled>Hitamo Izina ry'Umuntu 🎯</button>
+    </div>
+
+    <div id="message-box" class="hidden"></div>
+
+    <div id="result-display" class="hidden" style="margin-top: 20px; padding: 20px; background-color: #e3f2fd; border-radius: 10px; font-size: 32px; font-weight: bold; color: #d32f2f; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+        Yaaay😃😃 Utomboye <span id="picked-name"></span> 🎉
+    </div>
+</div>
+
+<!-- Admin sections (initially hidden) in English -->
+<div id="admin-panel" class="hidden">
+    <h2>🔐 Admin Panel: Add Names</h2>
+    <p>Add names to the pool. All users will see these names.</p>
+
+    <div>
+        <input type="text" id="adminNameInput" placeholder="Enter name to add" />
+        <button id="admin-add-button" onclick="adminAddName()">Add to Pool</button>
+    </div>
+
+    <div id="name-list"></div>
+
+    <button onclick="toggleAdminPanel()" style="background-color: #f44336; margin-top: 20px;">Close Admin Panel</button>
+</div>
+
+<div id="admin-log" class="hidden">
+    <h2>🔍 Admin Log: Who Picked Who</h2>
+    <div id="picks-log"></div>
+</div>
+
+<footer>
+    <div class="footer-content">
+        <!-- Software Engineer Avatar SVG -->
+        <svg class="developer-avatar" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+            <!-- Laptop base -->
+            <rect x="12" y="40" width="40" height="5" rx="2" fill="#444444" />
+            <rect x="16" y="28" width="32" height="12" rx="1" fill="#444444" />
+            <!-- Screen -->
+            <rect x="17" y="29" width="30" height="10" fill="#00796b" />
+            <!-- Code on screen -->
+            <rect x="19" y="31" width="10" height="1" fill="#ffffff" />
+            <rect x="19" y="33" width="15" height="1" fill="#ffffff" />
+            <rect x="19" y="35" width="12" height="1" fill="#ffffff" />
+            <rect x="30" y="35" width="4" height="1" fill="#ff9800" />
+            <rect x="24" y="31" width="5" height="1" fill="#ff9800" />
+            <!-- Keyboard area -->
+            <rect x="20" y="42" width="24" height="1" fill="#666666" />
+            <!-- Glasses -->
+            <circle cx="27" cy="20" r="3" fill="none" stroke="#333333" stroke-width="1.5" />
+            <circle cx="37" cy="20" r="3" fill="none" stroke="#333333" stroke-width="1.5" />
+            <line x1="30" y1="20" x2="34" y2="20" stroke="#333333" stroke-width="1.5" />
+            <line x1="24" y1="20" x2="21" y2="18" stroke="#333333" stroke-width="1.5" />
+            <line x1="40" y1="20" x2="43" y2="18" stroke="#333333" stroke-width="1.5" />
+            <!-- Gears - animate these -->
+            <g class="animate-gears">
+                <circle cx="49" cy="15" r="4" fill="none" stroke="#ff9800" stroke-width="1.5" />
+                <line x1="49" y1="11" x2="49" y2="13" stroke="#ff9800" stroke-width="1.5" />
+                <line x1="49" y1="17" x2="49" y2="19" stroke="#ff9800" stroke-width="1.5" />
+                <line x1="45" y1="15" x2="47" y2="15" stroke="#ff9800" stroke-width="1.5" />
+                <line x1="51" y1="15" x2="53" y2="15" stroke="#ff9800" stroke-width="1.5" />
+            </g>
+            <g class="animate-gears" style="animation-direction: reverse;">
+                <circle cx="15" cy="15" r="3" fill="none" stroke="#00796b" stroke-width="1.5" />
+                <line x1="15" y1="12" x2="15" y2="13" stroke="#00796b" stroke-width="1.5" />
+                <line x1="15" y1="17" x2="15" y2="18" stroke="#00796b" stroke-width="1.5" />
+                <line x1="12" y1="15" x2="13" y2="15" stroke="#00796b" stroke-width="1.5" />
+                <line x1="17" y1="15" x2="18" y2="15" stroke="#00796b" stroke-width="1.5" />
+            </g>
+        </svg>
+        <span class="developer-name">Created by Software Engineer: <b>PRINCIPIE CYUPE</b></span>
+    </div>
+    <div id="admin-access">
+        <span id="admin-panel-toggle" onclick="promptAdminPassword()">🔑 Admin Access</span>
+    </div>
+</footer>
+
+<script>
+    // Set admin password - CHANGE THIS TO YOUR OWN PASSWORD
+    const ADMIN_PASSWORD = "200608";
+
+    // Firebase configuration for multi-user support
+    const firebaseConfig = {
+        apiKey: "AIzaSyCbPtJjFCoyV0jQ6VyTfFDEs0Jyr8jFHrk",
+        authDomain: "random-22719.firebaseapp.com",
+        databaseURL: "https://random-22719-default-rtdb.firebaseio.com",
+        projectId: "random-22719",
+        storageBucket: "random-22719.firebasestorage.app",
+        messagingSenderId: "118068055803",
+        appId: "1:118068055803:web:e519be3e65e74ac2092a5e",
+        measurementId: "G-TYXMSB6MMN"
+    };
+
+    // Initialize Firebase
+    let app;
+    let database;
+    let namesRef;
+    let pickedRef;
+    let historyRef;
+    let isLoading = true;
+
+    // Local state
+    let names = [];
+    let picked = [];
+    let history = [];
+
+    // DOM elements
+    const nameCount = document.getElementById('count');
+    const adminPanel = document.getElementById('admin-panel');
+    const adminLog = document.getElementById('admin-log');
+    const nameList = document.getElementById('name-list');
+    const picksLog = document.getElementById('picks-log');
+    const messageBox = document.getElementById('message-box');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const pickButton = document.getElementById('pickButton');
+    const refreshButton = document.getElementById('refresh-button');
+
+    // Initialize the app
+    initApp();
+
+    // Check for dark mode
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+    }
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+        if (event.matches) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    });
+
+    // Initialize the app and Firebase connections
+    function initApp() {
+        try {
+            // Initialize Firebase
+            app = firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+
+            // Set up database references
+            namesRef = database.ref('names');
+            pickedRef = database.ref('picked');
+            historyRef = database.ref('history');
+
+            // Set up real-time listeners
+            setupListeners();
+
+            console.log("Firebase initialized successfully");
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+            showMessage("Error setting up the app. Check the console for details.");
+            hideLoadingOverlay();
+        }
+    }
+
+    // Set up real-time listeners for Firebase data
+    function setupListeners() {
+        // Listen for names changes
+        namesRef.on('value', (snapshot) => {
+            const data = snapshot.val() || [];
+            names = Array.isArray(data) ? data : Object.values(data);
+            updateNameCount();
+            updateNameList();
+
+            // Enable/disable pick button based on available names
+            pickButton.disabled = names.length === 0;
+
+            // Hide loading overlay once we have data
+            if (isLoading) {
+                hideLoadingOverlay();
+                isLoading = false;
+            }
+        }, (error) => {
+            console.error("Error getting names:", error);
+            showMessage("Ikibazo cyo kubona amazina");
+            hideLoadingOverlay();
+        });
+
+        // Listen for picked changes
+        pickedRef.on('value', (snapshot) => {
+            const data = snapshot.val() || [];
+            picked = Array.isArray(data) ? data : Object.values(data);
+        }, (error) => {
+            console.error("Error getting picked:", error);
+        });
+
+        // Listen for history changes
+        historyRef.on('value', (snapshot) => {
+            const data = snapshot.val() || [];
+            history = Array.isArray(data) ? data : Object.values(data);
+            updatePicksLog();
+        }, (error) => {
+            console.error("Error getting history:", error);
+        });
+    }
+
+    // Hide the loading overlay
+    function hideLoadingOverlay() {
+        if (loadingOverlay) {
+            loadingOverlay.style.display = "none";
+        }
+    }
+
+    // Refresh data from Firebase
+    function refreshData() {
+        const refreshBtn = document.getElementById('refresh-button');
+        refreshBtn.classList.add('refreshing');
+        refreshBtn.disabled = true;
+
+        // Force a refresh of all data
+        Promise.all([
+            namesRef.once('value'),
+            pickedRef.once('value'),
+            historyRef.once('value')
+        ]).then(() => {
+            showMessage("Refreshed succesfully!", true);
+        }).catch(error => {
+            console.error("Error refreshing data:", error);
+            showMessage("Ikibazo cyo kuvugurura amazina");
+        }).finally(() => {
+            refreshBtn.classList.remove('refreshing');
+            refreshBtn.disabled = false;
+        });
+    }
+
+    // Function to show messages to users
+    function showMessage(message, isSuccess = false) {
+        messageBox.textContent = message;
+        messageBox.classList.remove('hidden');
+
+        if (isSuccess) {
+            messageBox.classList.add('success');
+        } else {
+            messageBox.classList.remove('success');
+        }
+
+        // Hide message after 3 seconds
+        setTimeout(() => {
+            messageBox.classList.add('hidden');
+        }, 3000);
+    }
+
+    // Simple admin access method (in English)
+    function promptAdminPassword() {
+        const password = prompt("Enter admin password:");
+        if (password === ADMIN_PASSWORD) {
+            showAdminPanel();
+        } else {
+            alert("Incorrect password!");
+        }
+    }
+
+    // Toggle admin panel visibility
+    function toggleAdminPanel() {
+        if (adminPanel.classList.contains('hidden')) {
+            showAdminPanel();
+        } else {
+            hideAdminPanel();
+        }
+    }
+
+    // Show admin panel
+    function showAdminPanel() {
+        adminPanel.classList.remove('hidden');
+        adminLog.classList.remove('hidden');
+        updateNameList();
+        updatePicksLog();
+        console.log('Admin panel shown');
+    }
+
+    // Hide admin panel
+    function hideAdminPanel() {
+        adminPanel.classList.add('hidden');
+        adminLog.classList.add('hidden');
+        console.log('Admin panel hidden');
+    }
+
+    // Function for admin to add names (messages in English)
+    async function adminAddName() {
+        const input = document.getElementById('adminNameInput');
+        const name = input.value.trim();
+        const adminAddButton = document.getElementById('admin-add-button');
+
+        if (!name) {
+            showMessage('Please enter a name!');
+            return;
+        }
+
+        if (names.includes(name)) {
+            showMessage('This name is already in the pool!');
+            return;
+        }
+
+        if (picked.some(p => p.picked === name)) {
+            showMessage('This name has already been picked!');
+            return;
+        }
+
+        // Disable button while updating
+        adminAddButton.disabled = true;
+
+        // Add to local array and update Firebase
+        const newNames = [...names, name];
+
+        namesRef.set(newNames)
+            .then(() => {
+                input.value = '';
+                showMessage(`"${name}" added to the pool!`, true);
+            })
+            .catch(error => {
+                console.error("Error adding name:", error);
+                showMessage('Error adding name to the pool');
+            })
+            .finally(() => {
+                adminAddButton.disabled = false;
+            });
+    }
+
+    // Function to remove a name from the pool (admin only)
+    async function removeName(index) {
+        const nameToRemove = names[index];
+
+        // Create a new array without the removed name
+        const newNames = names.filter((_, i) => i !== index);
+
+        namesRef.set(newNames)
+            .then(() => {
+                showMessage(`"${nameToRemove}" removed from the pool!`, true);
+            })
+            .catch(error => {
+                console.error("Error removing name:", error);
+                showMessage('Error removing name from the pool');
+            });
+    }
+
+    // Function for users to pick a random name (messages in Kinyarwanda)
+    async function pickRandomName() {
+        const input = document.getElementById('userNameInput');
+        const user = input.value.trim();
+        const resultDisplay = document.getElementById('result-display');
+        const pickedNameElement = document.getElementById('picked-name');
+
+        // Reset displays and disable button while processing
+        resultDisplay.classList.add('hidden');
+        messageBox.classList.add('hidden');
+        pickButton.disabled = true;
+
+        // Check if the user entered their name
+        if (!user) {
+            showMessage('Andika izina ryawe mbere!');
+            pickButton.disabled = names.length === 0;
+            return;
+        }
+
+        // Get fresh data from Firebase to ensure we have the latest
+        try {
+            const snapshot = await namesRef.once('value');
+            const currentNames = snapshot.val() || [];
+            const availableNames = Array.isArray(currentNames) ? currentNames : Object.values(currentNames);
+
+            const pickedSnapshot = await pickedRef.once('value');
+            const currentPicked = pickedSnapshot.val() || [];
+            const pickedEntries = Array.isArray(currentPicked) ? currentPicked : Object.values(currentPicked);
+
+            // Check if this person already picked
+            const alreadyPicked = pickedEntries.some(p => p.picker.toLowerCase() === user.toLowerCase());
+            if (alreadyPicked) {
+                showMessage('Wamaze guhitamo izina!');
+                pickButton.disabled = availableNames.length === 0;
+                return;
+            }
+
+            // Check if there are names left to pick
+            if (availableNames.length === 0) {
+                showMessage('Nta mazina asigaye yo guhitamo!');
+                pickButton.disabled = true;
+                return;
+            }
+
+            // Select a random name from the list
+            const index = Math.floor(Math.random() * availableNames.length);
+            const selected = availableNames[index];
+
+            // Check if the user picked themselves
+            if (selected.toLowerCase() === user.toLowerCase()) {
+                showMessage('Ntushobora kwihitamo! Ongera ugerageze.');
+                pickButton.disabled = false;
+                return;
+            }
+
+            // If we get here, it's a valid pick - remove the name from the pool
+            const newNames = availableNames.filter((_, i) => i !== index);
+
+            // Create new picked entry
+            const timestamp = new Date().toLocaleString();
+            const newPickedEntry = { picker: user, picked: selected };
+            const newHistoryEntry = { picker: user, picked: selected, timestamp: timestamp };
+
+            // Update Firebase - do this in a transaction to ensure consistency
+            const updates = {};
+            updates['/names'] = newNames;
+            updates[`/picked/${pickedEntries.length}`] = newPickedEntry;
+            updates[`/history/${pickedEntries.length}`] = newHistoryEntry;
+
+            await database.ref().update(updates);
+
+            // Display the picked name on the page
+            pickedNameElement.textContent = selected;
+            resultDisplay.classList.remove('hidden');
+            resultDisplay.classList.add('pulse-animation');
+
+            // Clear the input field
+            input.value = '';
+
+        } catch (error) {
+            console.error("Error picking name:", error);
+            showMessage('Ikibazo: Ntushobora guhitamo izina ubu');
+            pickButton.disabled = false;
+        }
+    }
+
+    // Update the count display
+    function updateNameCount() {
+        nameCount.textContent = names.length;
+        pickButton.disabled = names.length === 0;
+    }
+
+    // Update the admin name list display (in English)
+    function updateNameList() {
+        nameList.innerHTML = '';
+        if (names.length === 0) {
+            nameList.innerHTML = '<div style="text-align:center;color:#777;">No names in the pool</div>';
+            return;
+        }
+
+        names.forEach((name, index) => {
+            const div = document.createElement('div');
+            div.innerHTML = `
+        <span>${name}</span>
+        <span class="remove-btn" onclick="removeName(${index})">✕</span>
+      `;
+            nameList.appendChild(div);
+        });
+    }
+
+    // Update the admin log of picks (in English)
+    function updatePicksLog() {
+        if (history.length === 0) {
+            picksLog.innerHTML = '<div class="no-picks">No picks recorded yet.</div>';
+            return;
+        }
+
+        let logHtml = '<table class="log-table">';
+        logHtml += '<tr><th>Time</th><th>Picker</th><th>Picked</th></tr>';
+
+        history.forEach(h => {
+            logHtml += `<tr>
+        <td class="log-timestamp">${h.timestamp}</td>
+        <td class="log-picker">${h.picker}</td>
+        <td class="log-picked">${h.picked}</td>
+      </tr>`;
+        });
+
+        logHtml += '</table>';
+        picksLog.innerHTML = logHtml;
+    }
+</script>
+</body>
+</html>
